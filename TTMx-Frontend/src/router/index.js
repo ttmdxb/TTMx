@@ -1,145 +1,198 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { setupAuthGuards } from './guards.js';
+import { useAuthStore } from '@/stores/auth'
 
+// Import components
+const LandingPage = () => import('@/pages/LandingPage.vue')
+const LoginPage = () => import('@/pages/auth/LoginPage.vue')
+const RegisterPage = () => import('@/pages/auth/RegisterPage.vue')
+const Dashboard = () => import('@/pages/dashboard/Dashboard.vue')
+const Services = () => import('@/pages/services/ServicesPage.vue')
+const Orders = () => import('@/pages/orders/OrdersPage.vue')
+const Wallet = () => import('@/pages/wallet/WalletPage.vue')
+const Profile = () => import('@/pages/profile/ProfilePage.vue')
+
+// Admin components
+const AdminDashboard = () => import('@/pages/admin/AdminDashboard.vue')
+const AdminUsers = () => import('@/pages/admin/AdminUsers.vue')
+const AdminOrders = () => import('@/pages/admin/AdminOrders.vue')
+const AdminServices = () => import('@/pages/admin/AdminServices.vue')
+
+const routes = [
+  // Public routes - No authentication required
+  {
+    path: '/',
+    name: 'Home',
+    component: () => import('@/pages/LandingPage.vue'),
+    meta: { 
+      requiresAuth: false,
+      title: 'TTMx - Professional Social Media Marketing'
+    }
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/pages/auth/LoginPage.vue'),
+    meta: { 
+      requiresAuth: false,
+      redirectIfAuthenticated: true,
+      title: 'Login - TTMx'
+    }
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: RegisterPage,
+    meta: { 
+      requiresAuth: false,
+      redirectIfAuthenticated: true,
+      title: 'Register - TTMx'
+    }
+  },
+
+  // Protected routes - Authentication required
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: Dashboard,
+    meta: { 
+      requiresAuth: true,
+      title: 'Dashboard - TTMx'
+    }
+  },
+  {
+    path: '/services',
+    name: 'Services',
+    component: Services,
+    meta: { 
+      requiresAuth: true,
+      title: 'Services - TTMx'
+    }
+  },
+  {
+    path: '/orders',
+    name: 'Orders',
+    component: Orders,
+    meta: { 
+      requiresAuth: true,
+      title: 'My Orders - TTMx'
+    }
+  },
+  {
+    path: '/wallet',
+    name: 'Wallet',
+    component: Wallet,
+    meta: { 
+      requiresAuth: true,
+      title: 'Wallet - TTMx'
+    }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
+    meta: { 
+      requiresAuth: true,
+      title: 'Profile - TTMx'
+    }
+  },
+
+  // Admin routes - Admin authentication required
+  {
+    path: '/admin',
+    name: 'AdminDashboard',
+    component: AdminDashboard,
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Admin Dashboard - TTMx'
+    }
+  },
+  {
+    path: '/admin/users',
+    name: 'AdminUsers',
+    component: AdminUsers,
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Manage Users - TTMx Admin'
+    }
+  },
+  {
+    path: '/admin/orders',
+    name: 'AdminOrders',
+    component: AdminOrders,
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Manage Orders - TTMx Admin'
+    }
+  },
+  {
+    path: '/admin/services',
+    name: 'AdminServices',
+    component: AdminServices,
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Manage Services - TTMx Admin'
+    }
+  },
+
+  // Catch all 404
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/pages/NotFound.vue'),
+    meta: { title: 'Page Not Found - TTMx' }
+  }
+]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-
-// Landing Page Route
-{
-  path: '/landing',
-  name: 'landing',
-  component: () => import('../components/pages/Landing.vue')
-},
-
-// Update the root redirect
-{
-  path: '/',
-  redirect: '/landing'
-},
-
-// Authentication Routes
-{
-  path: '/auth/login',
-  name: 'login',
-  component: () => import('../components/auth/Login.vue')
-},
-{
-  path: '/auth/register',
-  name: 'register',
-  component: () => import('../components/auth/Register.vue')
-},
-
-// Dashboard Routes
-{
-  path: '/dashboard',
-  name: 'user-dashboard',
-  component: () => import('../components/pages/dashboard.vue')
-},
-{
-  path: '/admin/dashboard',
-  name: 'admin-dashboard',
-  component: () => import('../components/pages/admin/dashboard.vue')
-},
-{
-  path: '/admin/superadmin-dashboard',
-  name: 'superadmin-dashboard',
-  component: () => import('../components/pages/admin/superadmin-dashboard.vue')
-},
-    // Wallet Routes
-    {
-      path: '/wallet/balance',
-      name: 'wallet-balance',
-      component: () => import('../components/pages/wallet/balance.vue')
-    },
-    {
-      path: '/wallet/add-funds',
-      name: 'wallet-add-funds',
-      component: () => import('../components/pages/wallet/add-funds.vue')
-    },
-    {
-      path: '/wallet/transactions',
-      name: 'wallet-transactions',
-      component: () => import('../components/pages/wallet/transactions.vue')
-    },
-
-    // Services Routes
-    {
-      path: '/services/instagram',
-      name: 'services-instagram',
-      component: () => import('../components/pages/services/instagram.vue')
-    },
-    {
-      path: '/services/tiktok',
-      name: 'services-tiktok',
-      component: () => import('../components/pages/services/tiktok.vue')
-    },
-    {
-      path: '/services/youtube',
-      name: 'services-youtube',
-      component: () => import('../components/pages/services/youtube.vue')
-    },
-    {
-      path: '/services/orders',
-      name: 'services-orders',
-      component: () => import('../components/pages/services/orders.vue')
-    },
-
-    // Support Routes
-    {
-      path: '/support/tickets',
-      name: 'support-tickets',
-      component: () => import('../components/pages/support/tickets.vue')
-    },
-    {
-      path: '/support/inbox',
-      name: 'support-inbox',
-      component: () => import('../components/pages/support/inbox.vue')
-    },
-
-    // Profile Routes
-    {
-      path: '/profile/settings',
-      name: 'profile-settings',
-      component: () => import('../components/pages/profile/settings.vue')
-    },
-
-    // Events
-    {
-      path: '/events',
-      name: 'events',
-      component: () => import('../components/pages/events.vue')
-    },
-
-    // Admin Routes (protected)
-    {
-      path: '/admin/api/keys',
-      name: 'admin-api-keys',
-      component: () => import('../components/pages/admin/api-keys.vue')
-    },
-
-    // Legal Routes
-    {
-      path: '/legal/terms',
-      name: 'legal-terms',
-      component: () => import('../components/pages/legal/terms.vue')
-    },
-// Add to your routes array
-{
-  path: '/admin/api-providers',
-  name: 'admin-api-providers',
-  component: () => import('../components/pages/admin/api-providers.vue')
-},
-{
-  path: '/admin/payment-gateways',
-  name: 'admin-payment-gateways',
-  component: () => import('../components/pages/admin/payment-gateways.vue')
-}
-
-  ]
+  history: createWebHistory(),
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0 }
+    }
+  }
 })
 
-setupAuthGuards(router);
+// Navigation guards
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore()
+  
+  // Set page title
+  document.title = to.meta.title || 'TTMx - Professional Social Media Marketing'
+  
+  // Check if user is authenticated
+  if (authStore.token) {
+    await authStore.validateToken()
+  }
+  
+  // Handle routes that require authentication
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next({ 
+      name: 'Login', 
+      query: { redirect: to.fullPath } 
+    })
+    return
+  }
+  
+  // Handle routes that require admin access
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    next({ name: 'Dashboard' })
+    return
+  }
+  
+  // Redirect authenticated users away from login/register
+  if (to.meta.redirectIfAuthenticated && authStore.isAuthenticated) {
+    next({ name: 'Dashboard' })
+    return
+  }
+  
+  next()
+})
 
 export default router
