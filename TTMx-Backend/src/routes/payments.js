@@ -1,30 +1,27 @@
 const express = require('express');
-const { auth } = require('../middleware/auth');
-
 const router = express.Router();
+const { authMiddleware } = require('../middleware/auth');
+const {
+  createPaymentIntent,
+  handleWebhook,
+  getWalletBalance,
+  getTransactionHistory
+} = require('../controllers/paymentController');
 
-// Placeholder payment routes
-router.post('/create-intent', auth, (req, res) => {
-  res.json({
-    success: true,
-    message: 'Payment integration coming soon'
-  });
-});
+// Webhook route (no auth required)
+router.post('/webhook', express.raw({type: 'application/json'}), handleWebhook);
 
-router.get('/wallet/balance', auth, async (req, res) => {
-  try {
-    const user = req.user;
-    res.json({
-      success: true,
-      balance: user.wallet.balance,
-      currency: user.wallet.currency
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get balance'
-    });
-  }
-});
+// Protected routes
+router.use(authMiddleware);
+
+// Create payment intent
+router.post('/create-intent', createPaymentIntent);
+
+// Get wallet balance
+router.get('/wallet/balance', getWalletBalance);
+
+// Get transaction history
+router.get('/transactions', getTransactionHistory);
 
 module.exports = router;
+

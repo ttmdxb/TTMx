@@ -1,108 +1,86 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-  userId: {
+  orderId: {
+    type: String,
+    unique: true,
+    default: function() {
+      return 'TTM' + Date.now() + Math.random().toString(36).substr(2, 5).toUpperCase();
+    }
+  },
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  orderId: {
-    type: String,
-    unique: true,
-    required: true
-  },
   service: {
-    serviceId: {
-      type: String,
-      required: true
-    },
-    name: {
-      type: String,
-      required: true
-    },
-    platform: {
-      type: String,
-      required: true,
-      enum: ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitter']
-    },
-    category: {
-      type: String,
-      required: true
-    },
-    provider: {
-      name: String,
-      providerId: String,
-      providerOrderId: String
-    }
-  },
-  target: {
-    link: {
-      type: String,
-      required: true
-    },
-    username: String,
-    postId: String
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Service',
+    required: true
   },
   quantity: {
     type: Number,
     required: true,
     min: 1
   },
-  pricing: {
-    rate: {
-      type: Number,
-      required: true
-    },
-    totalPrice: {
-      type: Number,
-      required: true
-    },
-    currency: {
-      type: String,
-      default: 'USD'
-    }
+  targetUrl: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  notes: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  totalCost: {
+    type: Number,
+    required: true,
+    min: 0
   },
   status: {
     type: String,
-    enum: ['Pending', 'Processing', 'In Progress', 'Completed', 'Partial', 'Cancelled', 'Refunded'],
-    default: 'Pending'
+    enum: ['pending', 'processing', 'in_progress', 'completed', 'partial', 'cancelled', 'failed'],
+    default: 'pending'
   },
-  progress: {
-    startCount: Number,
-    currentCount: Number,
-    delivered: Number,
-    percentage: {
-      type: Number,
-      default: 0
-    }
+  providerOrderId: {
+    type: String
   },
-  timestamps: {
-    ordered: {
-      type: Date,
-      default: Date.now
-    },
-    started: Date,
-    completed: Date
+  provider: {
+    type: String,
+    enum: ['vinasmm', 'hqsmartpanel', 'momopanel']
   },
-  notes: String,
-  refund: {
-    requested: Boolean,
-    reason: String,
-    amount: Number,
-    processed: Boolean,
-    processedAt: Date
+  startCount: {
+    type: Number,
+    default: 0
+  },
+  completed: {
+    type: Number,
+    default: 0
+  },
+  remains: {
+    type: Number,
+    default: 0
+  },
+  errorMessage: {
+    type: String
+  },
+  refunded: {
+    type: Boolean,
+    default: false
+  },
+  refundAmount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
 });
 
-// Generate order ID
-orderSchema.pre('save', async function(next) {
-  if (!this.orderId) {
-    const count = await mongoose.model('Order').countDocuments();
-    this.orderId = `ORD${(count + 1).toString().padStart(6, '0')}`;
-  }
-  next();
-});
+// Indexes
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ status: 1 });
+orderSchema.index({ providerOrderId: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);
+

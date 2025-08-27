@@ -1,26 +1,22 @@
 const express = require('express');
-const { body } = require('express-validator');
-const { 
-  getServices, 
-  placeOrder, 
-  getUserOrders, 
-  getOrderStatus 
-} = require('../controllers/orderController');
-const { auth } = require('../middleware/auth');
-
 const router = express.Router();
+const { authMiddleware } = require('../middleware/auth');
+const {
+  placeOrder,
+  getUserOrders,
+  getOrderStatus
+} = require('../controllers/orderController');
 
-// Validation rules
-const placeOrderValidation = [
-  body('serviceId').notEmpty().withMessage('Service ID is required'),
-  body('link').isURL().withMessage('Valid URL is required'),
-  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be a positive integer')
-];
+// All routes require authentication
+router.use(authMiddleware);
 
-// Routes
-router.get('/services', getServices);
-router.post('/place', auth, placeOrderValidation, placeOrder);
-router.get('/my-orders', auth, getUserOrders);
-router.get('/status/:orderId', auth, getOrderStatus);
+// Place new order
+router.post('/place', placeOrder);
+
+// Get user orders
+router.get('/my-orders', getUserOrders);
+
+// Get specific order status
+router.get('/:orderId/status', getOrderStatus);
 
 module.exports = router;

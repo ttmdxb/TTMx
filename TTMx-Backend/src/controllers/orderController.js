@@ -1,216 +1,192 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
-const Transaction = require('../models/Transaction');
-const providerManager = require('../services/smm/ProviderManager');
+const Service = require('../models/Service');
+const { smmProviders } = require('../services/smmService');
 
-// Get services
-exports.getServices = async (req, res) => {
+// Define getServices function that was missing
+const getServices = async (req, res) => {
   try {
-    const { platform } = req.query;
-    const services = await providerManager.getAllServices();
+    const { platform, category } = req.query;
     
-    let filteredServices = services;
-    if (platform) {
-      filteredServices = services.filter(service => 
-        service.name.toLowerCase().includes(platform.toLowerCase())
-      );
-    }
-
+    let filter = { status: 'active' };
+    if (platform) filter.platform = platform;
+    if (category) filter.category = category;
+    
+    const services = await Service.find(filter)
+      .sort({ platform: 1, category: 1, name: 1 });
+    
     res.json({
       success: true,
-      services: filteredServices
+      data: services
     });
   } catch (error) {
-    console.error('Get services error:', error);
+    console.error('Error fetching services:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch services'
+      error: 'Failed to fetch services'
     });
   }
 };
 
-// Place order
-exports.placeOrder = async (req, res) => {
+const placeOrder = async (req, res) => {
   try {
-    const { serviceId, link, quantity } = req.body;
-    const userId = req.user._id;
+    const { serviceId, quantity, targetUrl, notes } = req.body;
+    const userId = req.user.id;
 
-    // Validate input
-    if (!serviceId || !link || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Service ID, link, and quantity are required'
-      });
-    }
-
-    // Get service details
-    const services = await providerManager.getAllServices();
-    const service = services.find(s => s.id === serviceId);
-    
+    // Validate service
+    const service = await Service.findById(serviceId);
     if (!service) {
       return res.status(404).json({
         success: false,
-        message: 'Service not found'
+        error: 'Service not found'
       });
     }
 
-    // Calculate total price
-    const totalPrice = (quantity * service.rate / 1000);
+    // Calculate total cost
+    const totalCost = service.price * quantity;
 
     // Check user balance
     const user = await User.findById(userId);
-    if (user.wallet.balance < totalPrice) {
+    if (user.balance < totalCost) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient wallet balance'
+        error: 'Insufficient balance'
       });
     }
 
-    // Create order in database
-    const order = await Order.create({
-      userId,
-      service: {
-        serviceId: service.originalServiceId || serviceId,
-        name: service.name,
-        platform: service.category || 'Social Media',
-        category: service.category || 'engagement',
-        provider: {
-          name: service.provider,
-          providerId: serviceId
-        }
-      },
-      target: {
-        link,
-        username: extractUsernameFromLink(link)
-      },
-      quantity: parseInt(quantity),
-      pricing: {
-        rate: service.rate,
-        totalPrice,
-        currency: 'USD'
-      }
+    // Create order
+    const order = new Order({
+      user: userId,
+      service: serviceId,
+      quantity,
+      targetUrl,
+      notes,
+      totalCost,
+      status: 'pending'
     });
 
-    // Deduct from user balance
-    user.wallet.balance -= totalPrice;
+    await order.save();
+
+    // Deduct balance
+    user.balance -= totalCost;
     await user.save();
 
-    // Create transaction record
-    await Transaction.create({
-      userId,
-      type: 'spend',
-      amount: -totalPrice,
-      status: 'completed',
-      method: {
-        gateway: 'system'
-      },
-      reference: {
-        orderId: order._id,
-        description: `Order: ${service.name}`
-      },
-      balanceAfter: user.wallet.balance
-    });
-
-    // Place order with provider
+    // Submit to SMM provider
     try {
-      const providerResult = await providerManager.createOrder(
-        serviceId, 
-        link, 
+      const provider = smmProviders.getActiveProvider();
+      const providerOrderId = await provider.createOrder({
+        service: service.providerId,
+        link: targetUrl,
         quantity
-      );
-      
-      order.service.provider.providerOrderId = providerResult.providerOrderId;
-      order.status = 'Processing';
+      });
+
+      order.providerOrderId = providerOrderId;
+      order.status = 'processing';
       await order.save();
     } catch (providerError) {
-      console.error('Provider order error:', providerError);
-      // Order created but provider failed - will be processed manually
+      console.error('Provider error:', providerError);
+      // Refund user
+      user.balance += totalCost;
+      await user.save();
+      
+      order.status = 'failed';
+      order.errorMessage = 'Provider error';
+      await order.save();
     }
-
-    res.status(201).json({
-      success: true,
-      message: 'Order placed successfully',
-      orderId: order.orderId,
-      order: {
-        id: order.orderId,
-        service: order.service.name,
-        quantity: order.quantity,
-        totalPrice: order.pricing.totalPrice,
-        status: order.status
-      }
-    });
-
-  } catch (error) {
-    console.error('Place order error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to place order'
-    });
-  }
-};
-
-// Get user orders
-exports.getUserOrders = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const orders = await Order.find({ userId })
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name email');
 
     res.json({
       success: true,
-      orders
+      data: order
     });
+
   } catch (error) {
-    console.error('Get orders error:', error);
+    console.error('Order placement error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch orders'
+      error: 'Failed to place order'
     });
   }
 };
 
-// Get order status
-exports.getOrderStatus = async (req, res) => {
+const getUserOrders = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { page = 1, limit = 10, status } = req.query;
+
+    let filter = { user: userId };
+    if (status) filter.status = status;
+
+    const orders = await Order.find(filter)
+      .populate('service', 'name platform category')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Order.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        orders,
+        pagination: {
+          current: page,
+          pages: Math.ceil(total / limit),
+          total
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch orders'
+    });
+  }
+};
+
+const getOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const userId = req.user._id;
+    const userId = req.user.id;
 
-    const order = await Order.findOne({ 
-      $or: [{ orderId }, { _id: orderId }],
-      userId 
-    });
+    const order = await Order.findOne({ _id: orderId, user: userId })
+      .populate('service', 'name platform category');
 
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Order not found'
+        error: 'Order not found'
       });
+    }
+
+    // Update status from provider if processing
+    if (order.status === 'processing' && order.providerOrderId) {
+      try {
+        const provider = smmProviders.getActiveProvider();
+        const providerStatus = await provider.getOrderStatus(order.providerOrderId);
+        
+        if (providerStatus.status !== order.status) {
+          order.status = providerStatus.status;
+          order.completed = providerStatus.remains || 0;
+          await order.save();
+        }
+      } catch (providerError) {
+        console.error('Provider status check error:', providerError);
+      }
     }
 
     res.json({
       success: true,
-      order
+      data: order
     });
   } catch (error) {
-    console.error('Get order status error:', error);
+    console.error('Error fetching order status:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get order status'
+      error: 'Failed to fetch order status'
     });
   }
 };
-
-// Helper function to extract username from social media links
-function extractUsernameFromLink(link) {
-  try {
-    const url = new URL(link);
-    const pathParts = url.pathname.split('/').filter(part => part.length > 0);
-    return pathParts[0] || '';
-  } catch (error) {
-    return '';
-  }
-}
 
 module.exports = {
   getServices,

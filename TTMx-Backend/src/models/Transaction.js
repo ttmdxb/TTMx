@@ -1,72 +1,55 @@
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
-  userId: {
+  transactionId: {
+    type: String,
+    unique: true,
+    default: function() {
+      return 'TXN' + Date.now() + Math.random().toString(36).substr(2, 5).toUpperCase();
+    }
+  },
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  transactionId: {
-    type: String,
-    unique: true,
-    required: true
-  },
   type: {
     type: String,
-    enum: ['deposit', 'spend', 'refund', 'bonus', 'withdrawal'],
+    enum: ['deposit', 'withdrawal', 'order_payment', 'refund', 'bonus'],
     required: true
   },
   amount: {
     type: Number,
     required: true
   },
-  currency: {
-    type: String,
-    default: 'USD'
-  },
   status: {
     type: String,
     enum: ['pending', 'completed', 'failed', 'cancelled'],
     default: 'pending'
   },
-  method: {
-    gateway: {
-      type: String,
-      enum: ['stripe', 'paypal', 'nomod', 'admin', 'system']
-    },
-    details: {
-      paymentIntentId: String,
-      paypalOrderId: String,
-      nomodTransactionId: String,
-      last4: String,
-      brand: String
-    }
+  paymentMethod: {
+    type: String,
+    enum: ['stripe', 'paypal', 'nomod', 'wallet', 'bonus'],
+    required: true
   },
-  reference: {
-    orderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Order'
-    },
-    description: String,
-    adminNote: String
+  paymentIntentId: {
+    type: String
   },
-  balanceAfter: Number,
-  fees: {
-    processingFee: Number,
-    platformFee: Number
+  description: {
+    type: String,
+    required: true
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true
 });
 
-// Generate transaction ID
-transactionSchema.pre('save', async function(next) {
-  if (!this.transactionId) {
-    const prefix = this.type.toUpperCase().substr(0, 3);
-    const count = await mongoose.model('Transaction').countDocuments();
-    this.transactionId = `${prefix}${(count + 1).toString().padStart(8, '0')}`;
-  }
-  next();
-});
+// Indexes
+transactionSchema.index({ user: 1, createdAt: -1 });
+transactionSchema.index({ status: 1 });
+transactionSchema.index({ type: 1 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);
+
