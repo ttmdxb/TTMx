@@ -2,7 +2,7 @@
   "name": "ttmx-frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "TTMx Social Media Management Platform - Frontend"
+  "description": "TTMx Social Media Management Platform - Frontend",
   "type": "module",
   "scripts": {
     "dev": "vite",
